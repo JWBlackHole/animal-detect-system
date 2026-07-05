@@ -7,7 +7,18 @@ camera:
 
 shared_memory:
   name: frame_buffer
-  buffer_size: 8
+  buffer_size: 16
+
+detection:
+  enabled: true
+  detect_every_n_frames: 20
+  model_path: models/yolo.pt
+  image_size: 640
+  confidence: 0.35
+
+ipc:
+  video_frame_meta_socket: /tmp/animal_video_frame_meta.sock
+  detection_frame_meta_socket: /tmp/animal_detection_frame_meta.sock
 
 runtime:
   log_every_n_frames: 30

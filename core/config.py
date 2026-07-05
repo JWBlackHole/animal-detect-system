@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from typing import Optional
+
 import numpy as np
 import yaml
 
-
 DEFAULT_CONFIG_PATH = Path("config.yaml")
-
 
 @dataclass(frozen=True)
 class CameraConfig:
@@ -14,7 +14,29 @@ class CameraConfig:
     height: int
     fps: int
     pixel_format: str
-    dtype: str
+    dtype: np.dtype
+
+    @property
+    def frame_shape(self) -> tuple[int, int, int]:
+        return (
+            self.height,
+            self.width,
+            self.channel,
+        )
+    
+    @property
+    def channel(self) -> int:
+        if self.pixel_format in ("RGB888", "BGR888"):
+            return 3
+
+        if self.pixel_format in ("RGBA8888", "BGRA8888", "XRGB8888", "XBGR8888"):
+            return 4
+
+        raise ValueError(f"Unsupported pixel_format: {self.pixel_format}")
+    
+    @property
+    def frame_bytes(self) -> int:
+        return int(np.prod(self.frame_shape) * self.dtype.itemsize)
 
 
 @dataclass(frozen=True)
@@ -22,40 +44,30 @@ class SharedMemoryConfig:
     name: str
     buffer_size: int
 
+@dataclass(frozen=True)
+class DetectionConfig:
+    detect_every_n_frames: int
+    model_path: str
+    image_size: int
+    confidence: float
+
+@dataclass(frozen=True)
+class IPCConfig:
+    video_frame_meta_socket: str
+    detection_frame_meta_socket: str
 
 @dataclass(frozen=True)
 class RuntimeConfig:
     log_every_n_frames: int = 30
 
-
 @dataclass(frozen=True)
 class AppConfig:
     camera: CameraConfig
     shared_memory: SharedMemoryConfig
+    detection: Optional[DetectionConfig]
+    ipc: IPCConfig
     runtime: RuntimeConfig
-
-
-def get_channels(pixel_format: str) -> int:
-    if pixel_format in ("RGB888", "BGR888"):
-        return 3
-
-    if pixel_format in ("RGBA8888", "BGRA8888", "XRGB8888", "XBGR8888"):
-        return 4
-
-    raise ValueError(f"Unsupported pixel_format: {pixel_format}")
-
-
-def get_frame_shape(camera_config: CameraConfig) -> tuple[int, int, int]:
-    channels = get_channels(camera_config.pixel_format)
-    return (
-        camera_config.height,
-        camera_config.width,
-        channels,
-    )
-
-def get_frame_dtype(camera_config: CameraConfig) -> np.dtype:
-    return np.dtype(camera_config.dtype)
-
+    
 def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     config_path = Path(config_path)
 
@@ -67,46 +79,75 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
 
     camera_raw = raw["camera"]
     shm_raw = raw["shared_memory"]
+    detection_raw = raw["detection"]
+    ipc_raw = raw["ipc"]
     runtime_raw = raw.get("runtime", {})
 
+    # load camera config
     camera = CameraConfig(
         width=int(camera_raw["width"]),
         height=int(camera_raw["height"]),
         fps=int(camera_raw["fps"]),
         pixel_format=str(camera_raw["pixel_format"]),
-        dtype=str(camera_raw.get("dtype", "uint8")),
+        dtype=np.dtype(camera_raw["dtype"]),
     )
 
+    # load shared memory config
     shared_memory = SharedMemoryConfig(
         name=str(shm_raw["name"]),
         buffer_size=int(shm_raw["buffer_size"]),
     )
+    if shared_memory.buffer_size <= 0:
+        raise ValueError("shared_memory.buffer_size must be positive.")
+    
+    # load detection config
+    if(bool(detection_raw["enabled"]) == True):
+        detection = DetectionConfig(
+            detect_every_n_frames=int(detection_raw["detect_every_n_frames"]),
+            model_path=str(detection_raw["model_path"]),
+            image_size=int(detection_raw["image_size"]),
+            confidence=float(detection_raw["confidence"])
+        )
+        if detection.detect_every_n_frames <= 0:
+            raise ValueError("detection.detect_every_n_frames must be positive.")
 
+        if detection.image_size <= 0:
+            raise ValueError("detection.image_size must be positive.")
+
+        if not 0.0 <= detection.confidence <= 1.0:
+            raise ValueError("detection.confidence must be between 0.0 and 1.0.")
+        
+    # load IPC config
+    ipc = IPCConfig(
+        video_frame_meta_socket=str(ipc_raw["video_frame_meta_socket"]),
+        detection_frame_meta_socket=str(ipc_raw["detection_frame_meta_socket"])
+    )
+
+    # load runtime behaviour config
     runtime = RuntimeConfig(
         log_every_n_frames=int(runtime_raw.get("log_every_n_frames", 30)),
     )
 
-    if shared_memory.buffer_size <= 0:
-        raise ValueError("shared_memory.buffer_size must be positive.")
-
-    frame_shape = get_frame_shape(camera)
-    frame_dtype = get_frame_dtype(camera)
-
-    if frame_dtype != np.dtype(np.uint8):
+    if camera.dtype != np.dtype(np.uint8):
         raise ValueError("Currently only uint8 frame dtype is supported.")
 
     print("---------------------------")
     print("[config] loaded")
     print(f"camera      : {camera.width}x{camera.height} {camera.fps}fps")
     print(f"pixel format: {camera.pixel_format}")
-    print(f"frame shape : {frame_shape}")
-    print(f"dtype       : {frame_dtype}")
+    print(f"frame shape : {camera.frame_shape}")
+    print(f"dtype       : {camera.dtype}")
     print(f"buffer name : {shared_memory.name}")
     print(f"buffer size : {shared_memory.buffer_size}")
+    print(f"detection enable: {detection_raw["enabled"]}")
+    print(f"video meta socket    : {ipc.video_frame_meta_socket}")
+    print(f"detection meta socket: {ipc.detection_frame_meta_socket}")
     print("---------------------------")
 
     return AppConfig(
         camera=camera,
         shared_memory=shared_memory,
+        detection=detection,
+        ipc=ipc,
         runtime=runtime,
     )

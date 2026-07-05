@@ -1,25 +1,28 @@
 import time
+from pathlib import Path
 from multiprocessing import Lock, Event, Process
 
 import numpy as np
 
 
 from core.config import (
-    get_frame_dtype,
-    get_frame_shape,
-    load_config,
+    load_config
 )
+
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.app import camera_main
 # from services.streaming_process.app import streaming_main
 # from services.detection_process.app import detection_main
 
+CONFIG_PATH = Path("config.yaml")
+
 def main() -> None:
     # load config
-    config = load_config()
+    
+    config = load_config(config_path = CONFIG_PATH)
 
-    frame_shape = get_frame_shape(config.camera)
-    frame_dtype = get_frame_dtype(config.camera)
+    frame_shape = config.camera.frame_shape
+    frame_dtype = config.camera.dtype
 
     buffer_name = config.shared_memory.name
     buffer_size = config.shared_memory.buffer_size
