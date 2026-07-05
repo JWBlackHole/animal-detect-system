@@ -1,0 +1,13 @@
+camera:
+  width: 1280
+  height: 720
+  fps: 30
+  pixel_format: RGB888
+  dtype: uint8
+
+shared_memory:
+  name: frame_buffer
+  buffer_size: 8
+
+runtime:
+  log_every_n_frames: 30

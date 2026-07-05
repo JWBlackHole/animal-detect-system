@@ -1,4 +1,5 @@
-import time
+# services/camera_process/pi_camera.py
+
 from typing import Optional
 
 from picamera2 import Picamera2
@@ -47,9 +48,9 @@ class PiCamera:
         print(
             "---------------------------\n"
             "[PiCamera] started\n"
-            f"{self.width}x{self.height} \n"
-            f"{self.fps}fps\n"
-            f"{self.pixel_format}\n"
+            # f"{self.width}x{self.height} \n"
+            # f"{self.fps}fps\n"
+            # f"{self.pixel_format}\n"
             "---------------------------\n"
         )
     
@@ -74,7 +75,6 @@ class PiCamera:
 
         with self.picam.captured_request() as request:
             image    = request.make_array("main")
-            print(type(image))
             metadata = request.get_metadata()
 
         ts = metadata["SensorTimestamp"]

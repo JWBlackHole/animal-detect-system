@@ -1,0 +1,101 @@
+import time
+from multiprocessing import Lock, Event, Process
+
+import numpy as np
+
+
+from core.config import (
+    get_frame_dtype,
+    get_frame_shape,
+    load_config,
+)
+from ipc.shared_frame_buffer import SharedFrameBuffer
+from services.camera_process.app import camera_main
+# from services.streaming_process.app import streaming_main
+# from services.detection_process.app import detection_main
+
+def main() -> None:
+    # load config
+    config = load_config()
+
+    frame_shape = get_frame_shape(config.camera)
+    frame_dtype = get_frame_dtype(config.camera)
+
+    buffer_name = config.shared_memory.name
+    buffer_size = config.shared_memory.buffer_size
+
+    # async setting
+    lock = Lock()
+    stop_event = Event()
+
+    # creates shared buffer
+    frame_buffer = SharedFrameBuffer(
+        name=buffer_name,
+        frame_shape=frame_shape,
+        dtype=frame_dtype,
+        buffer_size=buffer_size,
+        lock=lock,
+        create=True,
+    )
+    # detached from parent process
+    frame_buffer.close()
+
+    print("---------------------------")
+    print("[main] SharedFrameBuffer created")
+    # print(f"buffer name : {buffer_name}")
+    # print(f"frame shape : {frame_shape}")
+    # print(f"dtype       : {frame_dtype}")
+    # print(f"buffer size : {buffer_size}")
+    print("---------------------------")
+
+    camera_process = Process(
+        name="camera_process",
+        target=camera_main,
+        args=(
+            lock,
+            stop_event
+        ),
+    )
+
+    try:
+        camera_process.start()
+        print("[main] camera_process started")
+
+        while camera_process.is_alive():
+            time.sleep(1)
+
+    except KeyboardInterrupt:
+        print("\n[main] KeyboardInterrupt received")
+        stop_event.set()
+
+    finally:
+        print("[main] shutting down...")
+
+        stop_event.set()
+
+        if camera_process.is_alive():
+            camera_process.join(timeout=3)
+
+        if camera_process.is_alive():
+            print("[main] camera_process did not stop gracefully, terminating...")
+            camera_process.terminate()
+            camera_process.join(timeout=3)
+
+        cleanup_buffer = SharedFrameBuffer(
+            name=buffer_name,
+            frame_shape=frame_shape,
+            dtype=frame_dtype,
+            buffer_size=buffer_size,
+            lock=lock,
+            create=False,
+        )
+
+        cleanup_buffer.close()
+        cleanup_buffer.unlink()
+
+        print("[main] SharedFrameBuffer unlinked")
+        print("[main] stopped")
+
+
+if __name__ == "__main__":
+    main()
