@@ -12,7 +12,7 @@ from core.config import (
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.app import camera_main
 # from services.streaming_process.app import streaming_main
-# from services.detection_process.app import detection_main
+from services.detection_process.app import detection_main
 
 CONFIG_PATH = Path("config.yaml")
 
@@ -45,22 +45,25 @@ def main() -> None:
 
     print("---------------------------")
     print("[main] SharedFrameBuffer created")
-    # print(f"buffer name : {buffer_name}")
-    # print(f"frame shape : {frame_shape}")
-    # print(f"dtype       : {frame_dtype}")
-    # print(f"buffer size : {buffer_size}")
     print("---------------------------")
 
     camera_process = Process(
         name="camera_process",
         target=camera_main,
-        args=(
-            lock,
-            stop_event
-        ),
+        args=(lock, stop_event),
+    )
+    detection_process = Process(
+        name="detection_process",
+        target=detection_main,
+        args=(lock, stop_event),
     )
 
     try:
+        detection_process.start()
+        print("[main] detection_process started")
+
+        time.sleep(10) # waiting for detection model being loaded
+
         camera_process.start()
         print("[main] camera_process started")
 

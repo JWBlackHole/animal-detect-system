@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from typing import Optional
-
 import numpy as np
 import yaml
 
@@ -46,15 +44,22 @@ class SharedMemoryConfig:
 
 @dataclass(frozen=True)
 class DetectionConfig:
+    enabled: bool
     detect_every_n_frames: int
     model_path: str
     image_size: int
     confidence: float
 
+    cpu_affinity: list[int] | None
+    torch_num_threads: int
+    torch_num_interop_threads: int
+    process_nice: int
+
 @dataclass(frozen=True)
 class IPCConfig:
     video_frame_meta_socket: str
     detection_frame_meta_socket: str
+    detection_result_socket: str
 
 @dataclass(frozen=True)
 class RuntimeConfig:
@@ -64,7 +69,7 @@ class RuntimeConfig:
 class AppConfig:
     camera: CameraConfig
     shared_memory: SharedMemoryConfig
-    detection: Optional[DetectionConfig]
+    detection: DetectionConfig
     ipc: IPCConfig
     runtime: RuntimeConfig
     
@@ -101,26 +106,30 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         raise ValueError("shared_memory.buffer_size must be positive.")
     
     # load detection config
-    if(bool(detection_raw["enabled"]) == True):
-        detection = DetectionConfig(
-            detect_every_n_frames=int(detection_raw["detect_every_n_frames"]),
-            model_path=str(detection_raw["model_path"]),
-            image_size=int(detection_raw["image_size"]),
-            confidence=float(detection_raw["confidence"])
-        )
-        if detection.detect_every_n_frames <= 0:
-            raise ValueError("detection.detect_every_n_frames must be positive.")
+    detection = DetectionConfig(
+        enabled               = bool(detection_raw["enabled"]),
+        detect_every_n_frames = int(detection_raw["detect_every_n_frames"]),
+        model_path            = str(detection_raw["model_path"]),
+        image_size            = int(detection_raw["image_size"]),
+        confidence            = float(detection_raw["confidence"]),
 
-        if detection.image_size <= 0:
-            raise ValueError("detection.image_size must be positive.")
-
-        if not 0.0 <= detection.confidence <= 1.0:
-            raise ValueError("detection.confidence must be between 0.0 and 1.0.")
+        cpu_affinity          = list(detection_raw["cpu_affinity"]),
+        torch_num_threads     = int(detection_raw["torch_num_threads"]),
+        torch_num_interop_threads = int(detection_raw["torch_num_interop_threads"]),
+        process_nice              = int(detection_raw["process_nice"])
+    )
+    if detection.detect_every_n_frames <= 0:
+        raise ValueError("detection.detect_every_n_frames must be positive.")
+    if detection.image_size <= 0:
+        raise ValueError("detection.image_size must be positive.")
+    if not 0.0 <= detection.confidence <= 1.0:
+        raise ValueError("detection.confidence must be between 0.0 and 1.0.")
         
     # load IPC config
     ipc = IPCConfig(
         video_frame_meta_socket=str(ipc_raw["video_frame_meta_socket"]),
-        detection_frame_meta_socket=str(ipc_raw["detection_frame_meta_socket"])
+        detection_frame_meta_socket=str(ipc_raw["detection_frame_meta_socket"]),
+        detection_result_socket=str(ipc_raw["detection_result_socket"])
     )
 
     # load runtime behaviour config

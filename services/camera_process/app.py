@@ -123,6 +123,7 @@ def camera_main(
             # ------- Send to Detection Process ------- #
             # print(frame_id % detect_every_n_frames)
             if detect_every_n_frames and frame_id % detect_every_n_frames == 0:
+                # print("sent to detection")
                 detection_meta_sender.send(metadata)
 
             # ------- Send to Video Process ------- #

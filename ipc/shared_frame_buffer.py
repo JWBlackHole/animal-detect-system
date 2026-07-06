@@ -120,11 +120,13 @@ class SharedFrameBuffer:
 
         with self.lock:
             if int(self.headers[slot]["valid"]) != 1:
+                print("[shared memory] slot not valid")
                 return None
 
             stored_frame_id = int(self.headers[slot]["frame_id"])
 
             if stored_frame_id != frame_id:
+                print("[shared memory] Incorrect frame_id")
                 return None
 
             timestamp = int(self.headers[slot]["timestamp"])
