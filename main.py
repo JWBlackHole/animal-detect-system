@@ -11,7 +11,7 @@ from core.config import (
 
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.app import camera_main
-# from services.streaming_process.app import streaming_main
+from services.video_process.app import video_test_main
 from services.detection_process.app import detection_main
 
 CONFIG_PATH = Path("config.yaml")
@@ -57,6 +57,11 @@ def main() -> None:
         target=detection_main,
         args=(lock, stop_event),
     )
+    video_process = Process(
+        name="video_process",
+        target=video_test_main,
+        args=(lock, stop_event),
+    )
 
     try:
         detection_process.start()
@@ -66,6 +71,9 @@ def main() -> None:
 
         camera_process.start()
         print("[main] camera_process started")
+
+        video_process.start()
+        print("[main] video_process started")
 
         while camera_process.is_alive():
             time.sleep(1)

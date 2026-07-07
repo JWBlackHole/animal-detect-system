@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from multiprocessing import Event
 from multiprocessing.synchronize import Event as SyncEvent
 from typing import Any
 
@@ -30,9 +29,6 @@ def detection_main(
 ) -> None:
     """
     Detection process.
-
-    Responsibilities:
-    - Load config.yaml
     - Receive frame metadata from camera_process
     - Fetch frame from SharedFrameBuffer by frame_id
     - Run YOLO inference

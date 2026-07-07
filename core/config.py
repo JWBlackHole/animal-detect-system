@@ -56,6 +56,12 @@ class DetectionConfig:
     process_nice: int
 
 @dataclass(frozen=True)
+class VideoConfig:
+    buffer_size: int
+    output_fps: int
+    startup_delay_ms: int
+
+@dataclass(frozen=True)
 class IPCConfig:
     video_frame_meta_socket: str
     detection_frame_meta_socket: str
@@ -70,6 +76,7 @@ class AppConfig:
     camera: CameraConfig
     shared_memory: SharedMemoryConfig
     detection: DetectionConfig
+    video: VideoConfig
     ipc: IPCConfig
     runtime: RuntimeConfig
     
@@ -85,6 +92,7 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     camera_raw = raw["camera"]
     shm_raw = raw["shared_memory"]
     detection_raw = raw["detection"]
+    video_raw = raw["video"]
     ipc_raw = raw["ipc"]
     runtime_raw = raw.get("runtime", {})
 
@@ -124,6 +132,13 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         raise ValueError("detection.image_size must be positive.")
     if not 0.0 <= detection.confidence <= 1.0:
         raise ValueError("detection.confidence must be between 0.0 and 1.0.")
+    
+    # load video config
+    video = VideoConfig(
+        buffer_size=int(video_raw["buffer_size"]),
+        output_fps=int(video_raw["output_fps"]),
+        startup_delay_ms=int(video_raw["startup_delay_ms"])
+    )
         
     # load IPC config
     ipc = IPCConfig(
@@ -157,6 +172,7 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         camera=camera,
         shared_memory=shared_memory,
         detection=detection,
+        video=video,
         ipc=ipc,
         runtime=runtime,
     )
