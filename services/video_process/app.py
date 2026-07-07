@@ -21,6 +21,8 @@ SUMMARY_EVERY_N_OUTPUTS = 30
 
 @dataclass
 class VideoStats:
+    target_fps: Optional[int] = None
+
     # for frame socket receiving meta
     meta      : int = 0
     fetched   : int = 0
@@ -81,6 +83,8 @@ def video_test_main(lock: Any, stop_event: SyncEvent) -> None:
 
     output_started: bool = False
     next_output_ns: Optional[int] = None
+
+    stats.target_fps = video_config.output_fps
 
     try:
         print("---------------------------")
@@ -175,15 +179,21 @@ def _output_one_frame(
         stats.test_start = True
         cv2.imwrite("output.jpg", output_image)
     
+    
+    now_ns = time.monotonic_ns()
+    # if stats.last_output_ns:
+    #     interval_ns = now_ns - stats.last_output_ns
+    #     if(abs(interval_ns - 1_000_000_000 / stats.target_fps) > 2_000_000):
+    #         print(f"[video-test] frame_id={frame.frame_id}, unusul output interval(ms): {interval_ns / 1_000_000}")
+    stats.last_output_ns = now_ns
+
     # log
     # print(
     #     f"[video-test] output frame_id={frame.frame_id}, "
     #     f"pending={video_buffer.used_n_slot}"
     # )
-    now_ns = time.monotonic_ns()
     # if(stats.last_output_ns):
-    #     print(f"[video-test] output interval(ms): {(now_ns - stats.last_output_ns) / 1_000_000}")
-    stats.last_output_ns = now_ns
+    #     print(f"[video-test] output interval(ms): {interval_ns / 1_000_000}")
 
 def _has_time_before_output(
     *,

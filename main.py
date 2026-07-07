@@ -5,9 +5,8 @@ from multiprocessing import Lock, Event, Process
 import numpy as np
 
 
-from core.config import (
-    load_config
-)
+from core.config import load_config
+from core.process_logging import run_with_log_file
 
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.app import camera_main
@@ -47,20 +46,50 @@ def main() -> None:
     print("[main] SharedFrameBuffer created")
     print("---------------------------")
 
+    # camera_process = Process(
+    #     name="camera_process",
+    #     target=camera_main,
+    #     args=(lock, stop_event),
+    # )
+    # detection_process = Process(
+    #     name="detection_process",
+    #     target=detection_main,
+    #     args=(lock, stop_event),
+    # )
+    # video_process = Process(
+    #     name="video_process",
+    #     target=video_test_main,
+    #     args=(lock, stop_event),
+    # )
+
+    # with logging
     camera_process = Process(
         name="camera_process",
-        target=camera_main,
-        args=(lock, stop_event),
+        target=run_with_log_file,
+        kwargs={
+            "process_name": "camera_process",
+            "target": camera_main,
+            "args": (lock, stop_event),
+        }
     )
     detection_process = Process(
         name="detection_process",
-        target=detection_main,
-        args=(lock, stop_event),
+        target=run_with_log_file,
+        kwargs={
+            "process_name": "detection_process",
+            "target": detection_main,
+            "args": (lock, stop_event),
+        },
     )
+
     video_process = Process(
         name="video_process",
-        target=video_test_main,
-        args=(lock, stop_event),
+        target=run_with_log_file,
+        kwargs={
+            "process_name": "video_process",
+            "target": video_test_main,
+            "args": (lock, stop_event),
+        },
     )
 
     try:
