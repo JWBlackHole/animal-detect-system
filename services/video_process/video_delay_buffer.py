@@ -30,6 +30,7 @@ class VideoDelayBuffer:
 
         self._frame_id_to_slot: dict[int, int] = {}
 
+        #stats
         self.dropped_frames = 0
 
     @property
@@ -47,6 +48,18 @@ class VideoDelayBuffer:
     @property
     def empty(self) -> bool:
         return self._count == 0
+    
+    @property
+    def front_frame_id(self) -> Optional[int]:
+        if not self._frames[self._start]:
+            return None
+        return self._frames[self._start].frame_id
+    
+    def in_buffer(self, frame_id) -> Optional[bool]:
+        slot = frame_id % self.buffer_size
+        if not self._frames[slot]:
+            return None
+        return self._frames[slot].frame_id == frame_id
 
     def append_frame(
         self,

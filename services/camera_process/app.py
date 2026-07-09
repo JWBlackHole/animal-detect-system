@@ -93,6 +93,8 @@ def camera_main(
             timestamp = int(frame["timestamp"])
             image = frame["image"]
 
+            # print(f"frame_id: {frame_id}, get frame")
+
             if image.shape != frame_shape:
                 raise RuntimeError(
                     f"Unexpected camera image shape: {image.shape}, "
@@ -123,18 +125,21 @@ def camera_main(
             # ------- Send to Detection Process ------- #
             # print(frame_id % detect_every_n_frames)
             if detect_every_n_frames and frame_id % detect_every_n_frames == 0:
-                # print("sent to detection")
+                # print(f"frame_id: {frame_id}, sent to detection process")
                 detection_meta_sender.send(metadata)
+                
 
             # ------- Send to Video Process ------- #
+            # print(f"frame_id: {frame_id}, before video send", flush=True)
             video_meta_sender.send(metadata)
+            # print(f"frame_id: {frame_id}, after video send", flush=True)
 
-            if frame_id % log_every_n_frames == 0:
-                print(
-                    f"[camera] frame_id={frame_id}, "
-                    f"slot={slot}, "
-                    f"timestamp={timestamp}, "
-                )
+            # if frame_id % log_every_n_frames == 0:
+            #     print(
+            #         f"[camera] frame_id={frame_id}, "
+            #         f"slot={slot}, "
+            #         f"timestamp={timestamp}, "
+            #     )
 
     finally:
         print("[camera] stopping...")

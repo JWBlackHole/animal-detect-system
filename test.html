@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Animal Live Stream</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #111;
+    }
+
+    iframe {
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <iframe
+    src="http://192.168.50.110:8889/live?controls=false&muted=true&autoplay=true&playsInline=true"
+    allow="autoplay; fullscreen"
+    scrolling="no">
+  </iframe>
+</body>
+</html>

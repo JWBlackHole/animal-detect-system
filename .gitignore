@@ -18,3 +18,10 @@ __pycache__/
 *.onnx
 *.engine
 *.ncnn
+
+auto.crt
+auto.key
+
+
+*.crt
+*.key

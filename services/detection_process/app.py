@@ -100,12 +100,11 @@ def detection_main(
 
             if metadata is None:
                 continue
-            
 
             frame_id = int(metadata["frame_id"])
             metadata_timestamp = int(metadata["timestamp"])
 
-            print(f"[detection] frame_id={frame_id} meta received from socket sender ")
+            # print(f"[detection] frame_id={frame_id} meta received from socket sender ")
 
             frame = frame_buffer.read_frame(frame_id)
 
@@ -115,7 +114,7 @@ def detection_main(
                     f"(probably overwritten)"
                 )
                 continue
-            print(f"[detection] frame_id={frame_id} image loaded successfully")
+            # print(f"[detection] frame_id={frame_id} image loaded successfully")
 
             image = frame["image"]
 

@@ -14,6 +14,8 @@ class CameraConfig:
     pixel_format: str
     dtype: np.dtype
 
+    log_every_n_seconds: int
+
     @property
     def frame_shape(self) -> tuple[int, int, int]:
         return (
@@ -55,11 +57,13 @@ class DetectionConfig:
     torch_num_interop_threads: int
     process_nice: int
 
+    log_every_n_seconds: int
+
 @dataclass(frozen=True)
 class VideoConfig:
     buffer_size: int
-    output_fps: int
     startup_delay_ms: int
+    log_every_n_seconds: int
 
 @dataclass(frozen=True)
 class IPCConfig:
@@ -69,7 +73,7 @@ class IPCConfig:
 
 @dataclass(frozen=True)
 class RuntimeConfig:
-    log_every_n_frames: int = 30
+    log_every_n_frames: int
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -103,6 +107,7 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         fps=int(camera_raw["fps"]),
         pixel_format=str(camera_raw["pixel_format"]),
         dtype=np.dtype(camera_raw["dtype"]),
+        log_every_n_seconds=int(camera_raw["log_every_n_seconds"]),
     )
 
     # load shared memory config
@@ -124,7 +129,9 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         cpu_affinity          = list(detection_raw["cpu_affinity"]),
         torch_num_threads     = int(detection_raw["torch_num_threads"]),
         torch_num_interop_threads = int(detection_raw["torch_num_interop_threads"]),
-        process_nice              = int(detection_raw["process_nice"])
+        process_nice              = int(detection_raw["process_nice"]),
+
+        log_every_n_seconds=int(detection_raw["log_every_n_seconds"])
     )
     if detection.detect_every_n_frames <= 0:
         raise ValueError("detection.detect_every_n_frames must be positive.")
@@ -136,8 +143,8 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     # load video config
     video = VideoConfig(
         buffer_size=int(video_raw["buffer_size"]),
-        output_fps=int(video_raw["output_fps"]),
-        startup_delay_ms=int(video_raw["startup_delay_ms"])
+        startup_delay_ms=int(video_raw["startup_delay_ms"]),
+        log_every_n_seconds=int(video_raw["log_every_n_seconds"]),
     )
         
     # load IPC config
