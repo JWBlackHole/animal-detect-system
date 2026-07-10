@@ -18,8 +18,6 @@ class DetectionStats:
     """for statistic log"""
     # for frame socket receiving meta
     meta      : int = 0
-    fetched   : int = 0
-    fetch_miss: int = 0
 
     # detection results
     detection_count   : int = 0
@@ -31,8 +29,6 @@ class DetectionStats:
 
     def clear(self):
         self.meta = 0
-        self.fetched = 0
-        self.fetch_miss = 0
 
         self.detection_count = 0
         self.total_inference_ms = 0.0
@@ -45,9 +41,9 @@ class DetectionStats:
             f"---------------------\n"
             f"[detection]\n"
             f"avg. detection interval: {0.0 if self.output == 0 else interval_s / self.output:.2f} seconds\n"
-            f"avg. inference time    : {0.0 if self.detection_count == 0 else self.total_inference_ms / self.detection_count:.3f}"
-            f"max. inference time    : {self.max_inference_ms:.3f}"
-            f"meta: {self.meta}, fetched : {self.fetched}, fetch_miss: {self.fetch_miss}\n"
+            f"avg. inference time    : {0.0 if self.detection_count == 0 else self.total_inference_ms / self.detection_count:.3f}\n"
+            f"max. inference time    : {self.max_inference_ms:.3f}\n"
+            f"meta: {self.meta}\n"
             f"results: {self.detection_count}\n"
             f"output : {self.output}\n"
             "---------------------\n"
@@ -132,12 +128,11 @@ def detection_main(
                 stats.clear()
                 last_log_time_ns = now_ns
             
+            # receving metadata
             metadata = metadata_receiver.recv()
-            stats.meta += 1
             if metadata is None:
-                stats.fetch_miss += 1
                 continue
-            stats.fetched += 1
+            stats.meta += 1
 
             frame_id = int(metadata["frame_id"])
             metadata_timestamp = int(metadata["timestamp"])
@@ -192,6 +187,7 @@ def detection_main(
 
             # send result to video process
             result_sender.send(result)
+            stats.output += 1
 
     finally:
         print("[detection] stopping...")
