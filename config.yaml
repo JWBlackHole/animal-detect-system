@@ -21,7 +21,7 @@ detection:
   torch_num_threads: 2
   torch_num_interop_threads: 1
   process_nice: 5
-  log_every_n_seconds: 30
+  log_every_n_seconds: 60
 
 video:
   buffer_size: 30

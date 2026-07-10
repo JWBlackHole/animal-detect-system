@@ -17,7 +17,7 @@ from services.detection_process.resource_control import configure_detection_proc
 class DetectionStats:
     """for statistic log"""
     # for frame socket receiving meta
-    meta      : int = 0
+    meta: int = 0
 
     # detection results
     detection_count   : int = 0
@@ -40,9 +40,9 @@ class DetectionStats:
         print(
             f"---------------------\n"
             f"[detection]\n"
-            f"avg. detection interval: {0.0 if self.output == 0 else interval_s / self.output:.2f} seconds\n"
-            f"avg. inference time    : {0.0 if self.detection_count == 0 else self.total_inference_ms / self.detection_count:.3f}\n"
-            f"max. inference time    : {self.max_inference_ms:.3f}\n"
+            f"avg. output interval: {0.0 if self.output == 0 else interval_s / self.output:.2f} seconds\n"
+            f"avg. inference time : {0.0 if self.detection_count == 0 else self.total_inference_ms / self.detection_count:.3f}\n"
+            f"max. inference time : {self.max_inference_ms:.3f}\n"
             f"meta: {self.meta}\n"
             f"results: {self.detection_count}\n"
             f"output : {self.output}\n"

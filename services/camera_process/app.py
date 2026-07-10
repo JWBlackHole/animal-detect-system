@@ -1,16 +1,39 @@
 # services/camera_process/app.py
 
-from multiprocessing import Event
+from dataclasses import dataclass
 from multiprocessing.synchronize import Event as SyncEvent
-
-from typing import Any
+from typing import Any, Optional
+import time
 
 from core.config import load_config
 from ipc.frame_socket_channel import FrameMetadataSender
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.pi_camera import PiCamera
 
+@dataclass
+class CameraStats:
+    """for camera statistic"""
+    camera_fps: float = 0
 
+    capture_count        : int = 0
+    session_start_time_ns: Optional[int] = None
+
+    last_frame_id       : int = -1
+    last_capture_time_ns: int = 0
+
+    max_frame_interval_ns: int = 0.0
+
+    def clear(self):
+        self.camera_fps = 0
+
+        self.capture_count         = 0
+        self.session_start_time_ns = None
+        
+        self.last_frame_id        = -1
+        self.last_capture_time_ns = 0
+
+        self.max_frame_interval_ns = 0.0
+    
 def camera_main(
     lock: Any,
     stop_event: SyncEvent,
@@ -68,6 +91,8 @@ def camera_main(
         strict=False,
     )
 
+    stats = CameraStats()
+
     try:
         camera.start()
         print("[camera] started")
@@ -82,13 +107,26 @@ def camera_main(
             print(f"[camera] detection enabled, every {detect_every_n_frames} frames")
         else:
             print("[camera] detection disabled")
-
+        
         while not stop_event.is_set():
             frame = camera.capture_once()
 
             frame_id = int(frame["frame_id"])
             timestamp = int(frame["timestamp"])
             image = frame["image"]
+
+            # update stats
+            now_ns = time.monotonic_ns()
+            
+            if(stats.session_start_time_ns == None):
+                stats.session_start_time_ns = time.monotonic_ns()
+                stats.camera_fps = 0
+            else:
+                stats.camera_fps = stats.capture_count / (now_ns - stats.session_start_time_ns) * 1_000_000_000
+                stats.max_frame_interval_ns = max(stats.max_frame_interval_ns, now_ns - stats.last_capture_time_ns)
+            stats.capture_count += 1
+            stats.last_frame_id        = frame_id
+            stats.last_capture_time_ns = timestamp
 
             # print(f"frame_id: {frame_id}, get frame")
 

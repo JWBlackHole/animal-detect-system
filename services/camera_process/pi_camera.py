@@ -87,12 +87,6 @@ class PiCamera:
             "image"         : image
         }
 
-        if(self.last_ts is not None):
-            frame_gap = (ts - self.last_ts) / 1_000_000
-            # print(frame_gap)
-            # if(frame_gap > 50.0):
-            #     print(f"[camera] picam frame gap > 50: {frame_gap}")
-
         self._frame_id += 1
         self.last_ts = ts
 

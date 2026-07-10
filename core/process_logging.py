@@ -3,7 +3,6 @@ import traceback
 from pathlib import Path
 from typing import Callable, Any
 
-
 def run_with_log_file(
     *,
     process_name: str,
