@@ -19,6 +19,7 @@ POLL_TIMEOUT_S = 0.010
 RESULT_WORK_SLACK_NS = 1_000_000  # 1ms
 META_WORK_SLACK_NS = 3_000_000    # 3ms, read_frame copy is heavier
 
+@dataclass
 class VideoStats:
     """for statistic log"""
     # for frame socket receiving meta
@@ -53,7 +54,7 @@ class VideoStats:
         print(
             f"---------------------\n"
             f"[video]\n"
-            f"avg. fps: {self.output / (interval_s):.2f}\n"
+            f"avg. fps: {0.0 if interval_s == 0.0 else self.output / interval_s:.2f}\n"
             f"meta: {self.meta}, fetched : {self.fetched}, fetch_miss: {self.fetch_miss}\n"
             f"results: {self.results}, matched: {self.matched}, late: {self.late}\n"
             f"output : {self.output}, dropped   : {self.dropped}, underflow : {self.underflow}\n"

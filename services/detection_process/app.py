@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from multiprocessing.synchronize import Event as SyncEvent
 from typing import Any
+from dataclasses import dataclass
 
 from core.config import load_config
 from ipc.frame_socket_channel import FrameMetadataReceiver
@@ -12,16 +13,45 @@ from services.detection_process.detector import YoloDetector
 
 from services.detection_process.resource_control import configure_detection_process
 
-def _build_cpu_meter():
-    try:
-        import psutil
-    except ImportError:
-        return None
+@dataclass
+class DetectionStats:
+    """for statistic log"""
+    # for frame socket receiving meta
+    meta      : int = 0
+    fetched   : int = 0
+    fetch_miss: int = 0
 
-    process = psutil.Process()
-    process.cpu_percent(interval=None)
+    # detection results
+    detection_count   : int = 0
+    total_inference_ms: float = 0.0
+    max_inference_ms  : float = 0.0
 
-    return process
+    # for result output
+    output   : int = 0
+
+    def clear(self):
+        self.meta = 0
+        self.fetched = 0
+        self.fetch_miss = 0
+
+        self.detection_count = 0
+        self.total_inference_ms = 0.0
+        self.max_inference_ms = 0.0
+
+        self.output = 0
+
+    def summarize(self, interval_s: int):
+        print(
+            f"---------------------\n"
+            f"[detection]\n"
+            f"avg. detection interval: {0.0 if self.output == 0 else interval_s / self.output:.2f} seconds\n"
+            f"avg. inference time    : {0.0 if self.detection_count == 0 else self.total_inference_ms / self.detection_count:.3f}"
+            f"max. inference time    : {self.max_inference_ms:.3f}"
+            f"meta: {self.meta}, fetched : {self.fetched}, fetch_miss: {self.fetch_miss}\n"
+            f"results: {self.detection_count}\n"
+            f"output : {self.output}\n"
+            "---------------------\n"
+        )
 
 def detection_main(
     lock: Any,
@@ -82,11 +112,7 @@ def detection_main(
         confidence=detection_config.confidence,
     )
 
-    cpu_meter = _build_cpu_meter()
-
-    detection_count = 0
-    total_inference_ms = 0.0
-    max_inference_ms = 0.0
+    stats = DetectionStats()
 
     try:
         print("[detection] started")
@@ -95,17 +121,28 @@ def detection_main(
         print(f"[detection] frame_shape={frame_shape}")
         print(f"[detection] dtype={frame_dtype}")
 
+        last_log_time_ns = None
         while not stop_event.is_set():
+            # logs
+            now_ns = time.monotonic_ns()
+            if not last_log_time_ns or (now_ns - last_log_time_ns) / 1_000_000_000 >= detection_config.log_every_n_seconds:
+                if last_log_time_ns == None:
+                    last_log_time_ns = now_ns
+                stats.summarize((now_ns - last_log_time_ns) / 1_000_000_000)
+                stats.clear()
+                last_log_time_ns = now_ns
+            
             metadata = metadata_receiver.recv()
-
+            stats.meta += 1
             if metadata is None:
+                stats.fetch_miss += 1
                 continue
+            stats.fetched += 1
 
             frame_id = int(metadata["frame_id"])
             metadata_timestamp = int(metadata["timestamp"])
 
             # print(f"[detection] frame_id={frame_id} meta received from socket sender ")
-
             frame = frame_buffer.read_frame(frame_id)
 
             if frame is None:
@@ -128,15 +165,14 @@ def detection_main(
                     f"Unexpected frame dtype: {image.dtype}, expected: {frame_dtype}"
                 )
 
+            # detection by yolo
             start = time.perf_counter()
             boxes = detector.detect(image)
             inference_ms = (time.perf_counter() - start) * 1000.0
-
-            detection_count += 1
-            total_inference_ms += inference_ms
-            max_inference_ms = max(max_inference_ms, inference_ms)
-
-            avg_inference_ms = total_inference_ms / detection_count
+            # update stats
+            stats.detection_count += 1
+            stats.total_inference_ms += inference_ms
+            stats.max_inference_ms = max(stats.max_inference_ms, inference_ms)
 
             result = {
                 "frame_id": frame_id,
@@ -145,20 +181,14 @@ def detection_main(
                 "inference_ms": inference_ms,
             }
 
-            if cpu_meter is not None:
-                cpu_percent = cpu_meter.cpu_percent(interval=None)
-                cpu_text = f", cpu={cpu_percent:.1f}%"
-            else:
-                cpu_text = ""
-
-            print(
-                f"[detection] frame_id={frame_id}, "
-                f"boxes={len(boxes)}, "
-                f"inference={inference_ms:.1f}ms, "
-                f"avg={avg_inference_ms:.1f}ms, "
-                f"max={max_inference_ms:.1f}ms"
-                f"{cpu_text}"
-            )
+            # print(
+            #     f"[detection] frame_id={frame_id}, "
+            #     f"boxes={len(boxes)}, "
+            #     f"inference={inference_ms:.1f}ms, "
+            #     f"avg={avg_inference_ms:.1f}ms, "
+            #     f"max={max_inference_ms:.1f}ms"
+            #     f"{cpu_text}"
+            # )
 
             # send result to video process
             result_sender.send(result)

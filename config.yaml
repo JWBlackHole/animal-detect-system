@@ -21,7 +21,7 @@ detection:
   torch_num_threads: 2
   torch_num_interop_threads: 1
   process_nice: 5
-  log_every_n_seconds: 3600
+  log_every_n_seconds: 30
 
 video:
   buffer_size: 30
@@ -42,6 +42,3 @@ ipc:
   video_frame_meta_socket: /tmp/animal_video_frame_meta.sock
   detection_frame_meta_socket: /tmp/animal_detection_frame_meta.sock
   detection_result_socket: /tmp/animal_detection_result.sock
-
-runtime:
-  log_every_n_frames: 30

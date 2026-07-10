@@ -72,17 +72,12 @@ class IPCConfig:
     detection_result_socket: str
 
 @dataclass(frozen=True)
-class RuntimeConfig:
-    log_every_n_frames: int
-
-@dataclass(frozen=True)
 class AppConfig:
     camera: CameraConfig
     shared_memory: SharedMemoryConfig
     detection: DetectionConfig
     video: VideoConfig
     ipc: IPCConfig
-    runtime: RuntimeConfig
     
 def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     config_path = Path(config_path)
@@ -154,11 +149,6 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         detection_result_socket=str(ipc_raw["detection_result_socket"])
     )
 
-    # load runtime behaviour config
-    runtime = RuntimeConfig(
-        log_every_n_frames=int(runtime_raw.get("log_every_n_frames", 30)),
-    )
-
     if camera.dtype != np.dtype(np.uint8):
         raise ValueError("Currently only uint8 frame dtype is supported.")
 
@@ -181,5 +171,4 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         detection=detection,
         video=video,
         ipc=ipc,
-        runtime=runtime,
     )

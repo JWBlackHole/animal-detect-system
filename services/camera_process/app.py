@@ -29,12 +29,9 @@ def camera_main(
     shm_config       = config.shared_memory
     detection_config = config.detection
     ipc_config       = config.ipc
-    runtime_config   = config.runtime
 
     frame_shape = camera_config.frame_shape
     frame_dtype = camera_config.dtype
-
-    log_every_n_frames = runtime_config.log_every_n_frames
 
     if detection_config is not None:
         detect_every_n_frames = detection_config.detect_every_n_frames
@@ -133,13 +130,6 @@ def camera_main(
             # print(f"frame_id: {frame_id}, before video send", flush=True)
             video_meta_sender.send(metadata)
             # print(f"frame_id: {frame_id}, after video send", flush=True)
-
-            # if frame_id % log_every_n_frames == 0:
-            #     print(
-            #         f"[camera] frame_id={frame_id}, "
-            #         f"slot={slot}, "
-            #         f"timestamp={timestamp}, "
-            #     )
 
     finally:
         print("[camera] stopping...")

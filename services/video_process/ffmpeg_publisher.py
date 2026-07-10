@@ -6,7 +6,6 @@ from typing import Optional
 
 import numpy as np
 
-
 class FFmpegRTSPPublisher:
     def __init__(
         self,
