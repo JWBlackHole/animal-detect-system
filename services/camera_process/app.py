@@ -1,42 +1,22 @@
 # services/camera_process/app.py
 
-from dataclasses import dataclass
+import queue
+
 from multiprocessing.synchronize import Event as SyncEvent
+from multiprocessing import Queue
 from typing import Any, Optional
 import time
 
 from core.config import load_config
+from core.stats import CameraStats, _build_cpu_meter
 from ipc.frame_socket_channel import FrameMetadataSender
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.pi_camera import PiCamera
 
-@dataclass
-class CameraStats:
-    """for camera statistic"""
-    camera_fps: float = 0
-
-    capture_count        : int = 0
-    session_start_time_ns: Optional[int] = None
-
-    last_frame_id       : int = -1
-    last_capture_time_ns: int = 0
-
-    max_frame_interval_ns: int = 0.0
-
-    def clear(self):
-        self.camera_fps = 0
-
-        self.capture_count         = 0
-        self.session_start_time_ns = None
-        
-        self.last_frame_id        = -1
-        self.last_capture_time_ns = 0
-
-        self.max_frame_interval_ns = 0.0
-    
 def camera_main(
     lock: Any,
     stop_event: SyncEvent,
+    stats_queue: Any
 ) -> None:
     """
     Camera process
@@ -90,6 +70,7 @@ def camera_main(
         ipc_config.detection_frame_meta_socket,
         strict=False,
     )
+    cpu_meter = _build_cpu_meter()
 
     stats = CameraStats()
 
@@ -108,8 +89,26 @@ def camera_main(
         else:
             print("[camera] detection disabled")
         
+        session_start_time_ns = None
+        last_capture_time_ns = None
         while not stop_event.is_set():
+            now_ns = time.monotonic_ns()
+
+            # ------ logs stats ------ #
+            if session_start_time_ns == None:
+                session_start_time_ns = now_ns
+            elif (now_ns - session_start_time_ns) >= camera_config.log_every_n_seconds * 1_000_000_000:
+                # TO-DO: print logs and send to monitor process
+                try:
+                    stats_queue.put_nowait(stats.to_stats((now_ns - session_start_time_ns) / 1_000_000_000, cpu_meter.cpu_percent(interval=None)))
+                except queue.Full:
+                    pass
+                stats.clear()
+                session_start_time_ns += camera_config.log_every_n_seconds * 1_000_000_000
+            
+            # ------ camera capture ------ #
             frame = camera.capture_once()
+            
 
             frame_id = int(frame["frame_id"])
             timestamp = int(frame["timestamp"])
@@ -117,16 +116,12 @@ def camera_main(
 
             # update stats
             now_ns = time.monotonic_ns()
-            
-            if(stats.session_start_time_ns == None):
-                stats.session_start_time_ns = time.monotonic_ns()
-                stats.camera_fps = 0
-            else:
-                stats.camera_fps = stats.capture_count / (now_ns - stats.session_start_time_ns) * 1_000_000_000
-                stats.max_frame_interval_ns = max(stats.max_frame_interval_ns, now_ns - stats.last_capture_time_ns)
+            if(last_capture_time_ns):
+                stats.max_frame_interval_ns = max(stats.max_frame_interval_ns, now_ns - last_capture_time_ns)
             stats.capture_count += 1
-            stats.last_frame_id        = frame_id
-            stats.last_capture_time_ns = timestamp
+            stats.last_frame_id = frame_id
+            last_capture_time_ns = now_ns
+
 
             # print(f"frame_id: {frame_id}, get frame")
 

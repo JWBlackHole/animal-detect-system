@@ -2,11 +2,13 @@ import numpy as np
 
 import select
 import time
-from dataclasses import dataclass
+import queue
 from multiprocessing.synchronize import Event as SyncEvent
+from multiprocessing import Queue
 from typing import Any, Optional
 
 from core.config import load_config
+from core.stats import VideoStats, _build_cpu_meter
 from ipc.frame_socket_channel import FrameMetadataReceiver
 from ipc.result_socket_channel import DetectionResultReceiver
 from ipc.shared_frame_buffer import SharedFrameBuffer
@@ -19,51 +21,7 @@ POLL_TIMEOUT_S = 0.010
 RESULT_WORK_SLACK_NS = 1_000_000  # 1ms
 META_WORK_SLACK_NS = 3_000_000    # 3ms, read_frame copy is heavier
 
-@dataclass
-class VideoStats:
-    """for statistic log"""
-    # for frame socket receiving meta
-    meta      : int = 0
-    fetched   : int = 0
-    fetch_miss: int = 0
-
-    # for result socket recieing detection result
-    results: int = 0
-    matched: int = 0
-    late   : int = 0
-
-    # for video output
-    output   : int = 0
-    dropped  : int = 0
-    underflow: int = 0
-
-    def clear(self):
-        self.meta = 0
-        self.fetched = 0
-        self.fetch_miss = 0
-
-        self.results = 0
-        self.matched = 0
-        self.late = 0
-
-        self.output = 0
-        self.dropped = 0
-        self.underflow = 0
-
-    def summarize(self, pending: int, interval_s: int):
-        print(
-            f"---------------------\n"
-            f"[video]\n"
-            f"avg. fps: {0.0 if interval_s == 0.0 else self.output / interval_s:.2f}\n"
-            f"meta: {self.meta}, fetched : {self.fetched}, fetch_miss: {self.fetch_miss}\n"
-            f"results: {self.results}, matched: {self.matched}, late: {self.late}\n"
-            f"output : {self.output}, dropped   : {self.dropped}, underflow : {self.underflow}\n"
-            f"buffer pending: {pending}\n"
-            "---------------------\n"
-        )
-
-
-def video_test_main(lock: Any, stop_event: SyncEvent) -> None:
+def video_main(lock: Any, stop_event: SyncEvent, stats_queue: Any) -> None:
     config = load_config()
 
     camera_config = config.camera
@@ -93,6 +51,8 @@ def video_test_main(lock: Any, stop_event: SyncEvent) -> None:
 
     video_buffer = VideoDelayBuffer(buffer_size=video_config.buffer_size)
 
+    cpu_meter = _build_cpu_meter()
+
     stats = VideoStats()
 
     publisher = FFmpegRTSPPublisher(
@@ -109,16 +69,18 @@ def video_test_main(lock: Any, stop_event: SyncEvent) -> None:
 
     sockets = [meta_receiver.sock, result_receiver.sock]
 
+    # for video buffer
     first_frame_ns    : Optional[int] = None
     startup_delay_ns  : int = int(video_config.startup_delay_ms * 1_000_000)
-    output_interval_ns: int = int(1_000_000_000 / camera_config.fps)
 
+    # for attach labels
     labels: dict[int,dict] = {}
-
+    output_interval_ns: int = int(1_000_000_000 / camera_config.fps)
+    
     output_started: bool = False
     next_output_ns: Optional[int] = None
 
-    last_log_time_ns = None
+    session_start_time_ns = None
     try:
         print("---------------------------")
         print("[video] videos process started")
@@ -137,18 +99,26 @@ def video_test_main(lock: Any, stop_event: SyncEvent) -> None:
 
             # after output started, it logs and outputs frames
             if(output_started):
-                # logs
-                if not last_log_time_ns or (now_ns - last_log_time_ns) / 1_000_000_000 >= video_config.log_every_n_seconds:
-                    if last_log_time_ns == None:
-                        last_log_time_ns = first_frame_ns
-                    stats.summarize(video_buffer.used_n_slot, (now_ns - last_log_time_ns) / 1_000_000_000)
+                # ------ logs stats ------ #
+                # update session_start_time_ns
+                if session_start_time_ns == None:
+                    session_start_time_ns = now_ns
+                elif (now_ns - session_start_time_ns) >= video_config.log_every_n_seconds * 1_000_000_000:
+                    # TO-DO: print logs and send to monitor process
+                    try:
+                        stats_queue.put_nowait(stats.to_stats((now_ns - session_start_time_ns) / 1_000_000_000, cpu_meter.cpu_percent(interval=None)))
+                    except queue.Full:
+                        pass
+                    stats.summarize((now_ns - session_start_time_ns) / 1_000_000_000)
                     stats.clear()
-                    last_log_time_ns = now_ns
-
+                    session_start_time_ns += video_config.log_every_n_seconds * 1_000_000_000
+                    
                 # draw boxes and output 1 frame
                 if now_ns >= next_output_ns:
                     # get frame
                     frame = video_buffer.pop_frame()
+                    stats.pending = video_buffer.used_n_slot
+
                     if frame is None:
                         stats.underflow += 1
                         next_output_ns += output_interval_ns
@@ -160,7 +130,7 @@ def video_test_main(lock: Any, stop_event: SyncEvent) -> None:
 
                     # output one frame
                     _output_one_frame(publisher, frame.image, stats)
-
+                    stats.last_frame_id = frame.frame_id
                     next_output_ns += output_interval_ns
                     continue
             
@@ -265,6 +235,8 @@ def _receive_one_frame(
 
     if dropped is not None:
         stats.dropped += 1
+
+    stats.pending = video_buffer.used_n_slot
     
     return True
 

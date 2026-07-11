@@ -1,17 +1,15 @@
 import time
 from pathlib import Path
-from multiprocessing import Lock, Event, Process
-
-import numpy as np
-
+from multiprocessing import Lock, Event, Process, Queue
 
 from core.config import load_config
 from core.process_logging import run_with_log_file
 
 from ipc.shared_frame_buffer import SharedFrameBuffer
 from services.camera_process.app import camera_main
-from services.video_process.app import video_test_main
+from services.video_process.app import video_main
 from services.detection_process.app import detection_main
+from services.monitor_process.app import monitor_main
 
 CONFIG_PATH = Path("config.yaml")
 
@@ -29,6 +27,7 @@ def main() -> None:
     # async setting
     lock = Lock()
     stop_event = Event()
+    stats_queue = Queue()
 
     # creates shared buffer
     frame_buffer = SharedFrameBuffer(
@@ -49,27 +48,36 @@ def main() -> None:
     # camera_process = Process(
     #     name="camera_process",
     #     target=camera_main,
-    #     args=(lock, stop_event),
+    #     args=(lock, stop_event, stats_queue),
     # )
     # detection_process = Process(
     #     name="detection_process",
     #     target=detection_main,
-    #     args=(lock, stop_event),
+    #     args=(lock, stop_event, stats_queue),
     # )
     # video_process = Process(
     #     name="video_process",
     #     target=video_test_main,
-    #     args=(lock, stop_event),
+    #     args=(lock, stop_event, stats_queue),
     # )
 
     # with logging
+    monitor_process = Process(
+        name="monitor_process",
+        target=run_with_log_file,
+        kwargs={
+            "process_name": "monitor_process",
+            "target": monitor_main,
+            "args": (stats_queue, stop_event),
+        },
+    )
     camera_process = Process(
         name="camera_process",
         target=run_with_log_file,
         kwargs={
             "process_name": "camera_process",
             "target": camera_main,
-            "args": (lock, stop_event),
+            "args": (lock, stop_event, stats_queue),
         }
     )
     detection_process = Process(
@@ -78,7 +86,7 @@ def main() -> None:
         kwargs={
             "process_name": "detection_process",
             "target": detection_main,
-            "args": (lock, stop_event),
+            "args": (lock, stop_event, stats_queue),
         },
     )
 
@@ -87,12 +95,15 @@ def main() -> None:
         target=run_with_log_file,
         kwargs={
             "process_name": "video_process",
-            "target": video_test_main,
-            "args": (lock, stop_event),
+            "target": video_main,
+            "args": (lock, stop_event, stats_queue),
         },
     )
 
     try:
+        monitor_process.start()
+        print("[main] monitor_process started")
+
         detection_process.start()
         print("[main] detection_process started")
 

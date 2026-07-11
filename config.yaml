@@ -4,7 +4,7 @@ camera:
   fps: 15
   pixel_format: RGB888
   dtype: uint8
-  log_every_n_seconds: 3600
+  log_every_n_seconds: 10
 
 shared_memory:
   name: frame_buffer
@@ -21,12 +21,12 @@ detection:
   torch_num_threads: 2
   torch_num_interop_threads: 1
   process_nice: 5
-  log_every_n_seconds: 60
+  log_every_n_seconds: 10
 
 video:
   buffer_size: 30
   startup_delay_ms: 1200
-  log_every_n_seconds: 60
+  log_every_n_seconds: 10
 
 stream:
   enabled: true

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import time
+import queue
+
 from multiprocessing.synchronize import Event as SyncEvent
+from multiprocessing import Queue
 from typing import Any
-from dataclasses import dataclass
 
 from core.config import load_config
+from core.stats import DetectionStats, _build_cpu_meter
 from ipc.frame_socket_channel import FrameMetadataReceiver
 from ipc.result_socket_channel import DetectionResultSender
 from ipc.shared_frame_buffer import SharedFrameBuffer
@@ -13,45 +16,10 @@ from services.detection_process.detector import YoloDetector
 
 from services.detection_process.resource_control import configure_detection_process
 
-@dataclass
-class DetectionStats:
-    """for statistic log"""
-    # for frame socket receiving meta
-    meta: int = 0
-
-    # detection results
-    detection_count   : int = 0
-    total_inference_ms: float = 0.0
-    max_inference_ms  : float = 0.0
-
-    # for result output
-    output   : int = 0
-
-    def clear(self):
-        self.meta = 0
-
-        self.detection_count = 0
-        self.total_inference_ms = 0.0
-        self.max_inference_ms = 0.0
-
-        self.output = 0
-
-    def summarize(self, interval_s: int):
-        print(
-            f"---------------------\n"
-            f"[detection]\n"
-            f"avg. output interval: {0.0 if self.output == 0 else interval_s / self.output:.2f} seconds\n"
-            f"avg. inference time : {0.0 if self.detection_count == 0 else self.total_inference_ms / self.detection_count:.3f}\n"
-            f"max. inference time : {self.max_inference_ms:.3f}\n"
-            f"meta: {self.meta}\n"
-            f"results: {self.detection_count}\n"
-            f"output : {self.output}\n"
-            "---------------------\n"
-        )
-
 def detection_main(
     lock: Any,
     stop_event: SyncEvent,
+    stats_queue: Any
 ) -> None:
     """
     Detection process.
@@ -108,6 +76,8 @@ def detection_main(
         confidence=detection_config.confidence,
     )
 
+    cpu_meter = _build_cpu_meter()
+
     stats = DetectionStats()
 
     try:
@@ -117,18 +87,25 @@ def detection_main(
         print(f"[detection] frame_shape={frame_shape}")
         print(f"[detection] dtype={frame_dtype}")
 
-        last_log_time_ns = None
+        session_start_time_ns = None
         while not stop_event.is_set():
-            # logs
             now_ns = time.monotonic_ns()
-            if not last_log_time_ns or (now_ns - last_log_time_ns) / 1_000_000_000 >= detection_config.log_every_n_seconds:
-                if last_log_time_ns == None:
-                    last_log_time_ns = now_ns
-                stats.summarize((now_ns - last_log_time_ns) / 1_000_000_000)
+
+            # ------ logs stats ------ #
+            if session_start_time_ns == None:
+                session_start_time_ns = now_ns
+            elif (now_ns - session_start_time_ns) >= detection_config.log_every_n_seconds * 1_000_000_000:
+                # TO-DO: print logs and send to monitor process
+                try:
+                    stats_queue.put_nowait(stats.to_stats((now_ns - session_start_time_ns) / 1_000_000_000, cpu_meter.cpu_percent(interval=None)))
+                except queue.Full:
+                    pass
+                stats.summarize((now_ns - session_start_time_ns) / 1_000_000_000)
                 stats.clear()
-                last_log_time_ns = now_ns
-            
-            # receving metadata
+                session_start_time_ns += detection_config.log_every_n_seconds * 1_000_000_000
+
+                
+            # ------ receving metadata ------ #
             metadata = metadata_receiver.recv()
             if metadata is None:
                 continue
